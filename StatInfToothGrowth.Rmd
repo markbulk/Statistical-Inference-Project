@@ -1,0 +1,111 @@
+---
+title: "An Exploration of ToothGrowth"
+author: "Mark Bulkeley"
+date: "April 2, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(datasets)
+library(data.table)
+library(ggplot2)
+library(gridExtra)
+options(scipen = 999)
+alpha <- 0.05
+```
+# Overview
+This brief paper is intended to explore the data in the `R` `datasets` package called `ToothGrowth` and to make some appropriate statistical inferences about the data.  Specifically, we will determine whether the Supplement (`supp`) and Dose (`dose`) have a significant impact on the Length  (`len`).
+
+## Assumptions
+We are assuming that the underlying population of Length is coming from a normal or gaussian distribution.  Because we are dealing with small sample sizes (especially when segmented to do the statistical tests), we will be using a Student T distribution that is slightly more tail-heavy than the normal distribution, but provides a more accurate accounting at low sample size (small `n`).  We will evaluate significance from an alpha of 95%, or from the perspective that our test will be wrong only 1 out of 20 times.  In addition, we will run one-sided tests and structure them in a way that the alternate hypothesis will be that the second group promotes greater length than the first.
+
+# Brief Description of the Data
+```{r loadData, echo=FALSE}
+data(ToothGrowth)
+tg <- data.table(ToothGrowth)
+```
+
+The ToothGrowth dataset consists of `r nrow(tg)` rows with `r ncol(tg)` columns.  The three column names are `len`, `dose` and `supp`.  `len` is a continuous variable with a range of `r range(tg$len)`.  `dose` has levels `r paste(unique(tg$dose), collapse=", ")` (mg of dosage) and `supp` has levels of `r paste(unique(tg$supp), collapse=", ")`.  Note that `VC` is short for Vitamin C and `OJ` is short for Orange Juice.  The data is based on an original study by Crampton, E.W. "The growth of the odontoblasts of the incisor tooth as a criterion of the vitamin C intake of the guinea pig", published in _The Journal of Nutrition_, vol. 33, issue 5, May 1947, pp. 491-504.  Details of the original study indicate that there were 60 different guinea pigs used, thus none of our tests will be paired (all independent samples).  Please refer to Table 1 and Figure 1 in the Appendix to further understand and explore the data.  Both include the code required to generate, for reproducibility.
+
+# Test of Supplement Significance
+
+Because of the small data set, we are going to rely on Student T tests to determine significance levels.  Given that there are only two levels of `supp`, this can be done simply with the `t.test` function provided with `R`.  Note that the Null Hypothesis that will be tested is that the difference in means is zero.  We would like to reject that to be able to say that the supplement type does matter.
+
+```{r suppSig}
+lst.test <- t.test(x=tg[supp=="VC"]$len, y=tg[supp=='OJ']$len, 
+                   paired = FALSE, alternative = "greater")
+print(lst.test)
+```
+
+Our sample difference in means is `r round(mean(tg[supp=="VC"]$len)-mean(tg[supp=="OJ"]$len),3)`.  Given that the p-value is `r lst.test$p.value`, which is greater than 0.95, we will reject the Null Hypothesis that the means are the same.  Thus, statistically, we can (barely) confidently distiguish between `OJ` and `VC` supplement types.  
+
+# Test of Dose Significance
+
+To test the significance of dosage, we are going to run two tests, the second dependent on the outcome of the first.  Our first test will be between 0.5 and 1 mg.  If that is not significant, the follow-on test will be between 0.5 and 2 mg.  If it is significant, the second test will be between 1 and 2 mg.  To do the tests, we will be using a Student T test with a Null Hypothesis that the distributions are the same and a significance level of p = 0.05 (the default for the `t.test` function).  It will take the same form as our tests previously.
+
+## 0.5mg Versus 1mg Test
+```{r test0.5v1}
+lst.test <- t.test(x=tg[dose==0.5]$len, y=tg[dose==1]$len, 
+                   paired = FALSE, alternative = "greater")
+print(lst.test)
+```
+
+Here, we have a very high p-value of `r lst.test$p.value` that supports the Null Hypothesis being rejected.  Therefore, we can infer from our data that a 1mg dose has an impact on length, relative to a 0.5mg dose.
+
+## 1mg Versus 2mg Test
+```{r test1v2}
+lst.test <- t.test(x=tg[dose==1]$len, y=tg[dose==2]$len, 
+                   paired = FALSE, alternative="greater")
+print(lst.test)
+```
+
+Here, as well, we have a just slightly less high p-value of `r lst.test$p.value` that supports the Null Hypothesis being rejected.  Therefore, we can infer from our data that a 2mg dose has an impact on length, relative to a 1mg dose.
+
+# Conclusions
+Based on our statistical inference tools, we conclude the following about the `ToothGrowth` dataset (for an alpha of 0.05):
+    
+1. We should accept the alternative hypothesis that the `OJ` has a greater impact on tooth growth than does `VC`.
+2. We should infer that there is a very significant difference in dosage levels of 0.5mg, 1mg and 2mg.
+
+Both of these conclusions make intuitive sense from our initial data exploration, particularly from a visual scan of the segmented boxplots in Figure 1.  There are no further areas of study that we can recommend, given the classroom nature of this dataset.
+
+\pagebreak
+
+## Appendix
+
+### Code to Load ToothGrowth dataset
+
+```{r loadDataShow, eval=FALSE}
+library(datasets)
+library(data.table)
+library(ggplot2)
+library(gridExtra)
+options(scipen = 999)
+alpha <- 0.05
+
+data(ToothGrowth)
+tg <- data.table(ToothGrowth)
+```
+
+### Table 1: ToothGrowth Data Exploration
+
+```{r table1, fig.align='center'}
+grid.arrange(tableGrob(tg[, .(`Mean\nLength`=mean(len), `Std.Dev\nLength`=round(sd(len),4), n=.N), 
+                          by = list(Supplement =supp, Dose=dose)], 
+                       row = NULL, theme = ttheme_minimal()))
+```
+
+\pagebreak
+
+### Figure 1: ToothGrowth Data Exploration
+
+```{r figure1, fig.height=4}
+ggplot(data = tg, mapping = aes(x = factor(dose), y = len, fill = supp)) +
+    geom_boxplot() +
+    scale_x_discrete(name = "Dose\n(in mg)") +
+    scale_y_continuous(name = "Tooth Length (mm)") +
+    scale_fill_discrete(name = "Supplement Type") +
+    theme(legend.position = c(0.1, 0.8)) +
+    ggtitle("Boxplot of ToothGrowth Data")
+```
